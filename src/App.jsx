@@ -334,18 +334,27 @@ function App() {
     const canvasRef = useRef(null)
     const animationRef = useRef(null)
     
-    const [gameStarted, setGameStarted] = useState(false)
+    const [gameState, setGameState] = useState('idle')
+    const [score, setScore] = useState(0)
+    const [highScore, setHighScore] = useState(() => {
+      const saved = localStorage.getItem('breakoutHighScore')
+      return saved ? parseInt(saved) : 0
+    })
+    const [lives, setLives] = useState(3)
+    const [level, setLevel] = useState(1)
     
     const paddleRef = useRef({ x: 150, width: 80, height: 15 })
     const ballRef = useRef({ x: 190, y: 400, dx: 3, dy: -3, radius: 8 })
     const bricksRef = useRef([])
     const scoreRef = useRef(0)
-    const brokenRef = useRef(0)
+    const livesRef = useRef(3)
+    const levelRef = useRef(1)
 
-    const totalBricks = 15
+    const brickColors = ['#F5C6D0', '#A8D5E8', '#B8E6C8', '#FFD9A8', '#D4B8E8']
+    const brickPoints = [50, 40, 30, 20, 10]
 
     const initBricks = () => {
-      const rows = 3
+      const rows = Math.min(3 + levelRef.current, 5)
       const cols = 5
       const brickWidth = 60
       const brickHeight = 20
@@ -360,7 +369,9 @@ function App() {
             y: r * (brickHeight + padding) + offsetTop,
             width: brickWidth,
             height: brickHeight,
-            visible: true
+            visible: true,
+            color: brickColors[r % brickColors.length],
+            points: brickPoints[r % brickPoints.length]
           })
         }
       }
@@ -368,12 +379,29 @@ function App() {
     }
 
     const startGame = () => {
-      setGameStarted(true)
+      setGameState('playing')
+      setScore(0)
+      setLives(3)
+      setLevel(1)
       scoreRef.current = 0
-      brokenRef.current = 0
+      livesRef.current = 3
+      levelRef.current = 1
       paddleRef.current = { x: 150, width: 80, height: 15 }
-      ballRef.current = { x: 190, y: 400, dx: 3, dy: -3, radius: 8 }
+      ballRef.current = { x: 190, y: 400, dx: 3 + levelRef.current * 0.5, dy: -3 - levelRef.current * 0.5, radius: 8 }
       initBricks()
+    }
+
+    const nextLevel = () => {
+      setLevel(l => l + 1)
+      levelRef.current += 1
+      paddleRef.current = { x: 150, width: 80, height: 15 }
+      ballRef.current = { x: 190, y: 400, dx: 3 + levelRef.current * 0.5, dy: -3 - levelRef.current * 0.5, radius: 8 }
+      initBricks()
+      setGameState('playing')
+    }
+
+    const resetBall = () => {
+      ballRef.current = { x: 190, y: 400, dx: 3 + levelRef.current * 0.5, dy: -3 - levelRef.current * 0.5, radius: 8 }
     }
 
     useEffect(() => {
@@ -389,7 +417,7 @@ function App() {
 
         bricksRef.current.forEach(brick => {
           if (brick.visible) {
-            ctx.fillStyle = '#A8D5E8'
+            ctx.fillStyle = brick.color
             ctx.beginPath()
             ctx.roundRect(brick.x, brick.y, brick.width, brick.height, 8)
             ctx.fill()
@@ -406,7 +434,7 @@ function App() {
         ctx.arc(ballRef.current.x, ballRef.current.y, ballRef.current.radius, 0, Math.PI * 2)
         ctx.fill()
 
-        if (gameStarted) {
+        if (gameState === 'playing') {
           ballRef.current.x += ballRef.current.dx
           ballRef.current.y += ballRef.current.dy
 
@@ -424,10 +452,14 @@ function App() {
             ballRef.current.x < paddleRef.current.x + paddleRef.current.width + ballRef.current.radius
           ) {
             ballRef.current.dy = -Math.abs(ballRef.current.dy)
+            const hitPos = (ballRef.current.x - paddleRef.current.x) / paddleRef.current.width
+            ballRef.current.dx = (hitPos - 0.5) * 8
           }
 
+          let allBroken = true
           bricksRef.current.forEach(brick => {
             if (brick.visible) {
+              allBroken = false
               const closestX = Math.max(brick.x, Math.min(ballRef.current.x, brick.x + brick.width))
               const closestY = Math.max(brick.y, Math.min(ballRef.current.y, brick.y + brick.height))
               const distanceX = ballRef.current.x - closestX
@@ -450,14 +482,32 @@ function App() {
                 }
 
                 brick.visible = false
-                scoreRef.current += 10
-                brokenRef.current += 1
+                scoreRef.current += brick.points
+                setScore(scoreRef.current)
               }
             }
           })
 
+          if (allBroken) {
+            setGameState('cleared')
+            if (scoreRef.current > highScore) {
+              setHighScore(scoreRef.current)
+              localStorage.setItem('breakoutHighScore', scoreRef.current.toString())
+            }
+          }
+
           if (ballRef.current.y > canvas.height + 50) {
-            ballRef.current = { x: 190, y: 400, dx: 3, dy: -3, radius: 8 }
+            livesRef.current -= 1
+            setLives(livesRef.current)
+            if (livesRef.current <= 0) {
+              setGameState('gameover')
+              if (scoreRef.current > highScore) {
+                setHighScore(scoreRef.current)
+                localStorage.setItem('breakoutHighScore', scoreRef.current.toString())
+              }
+            } else {
+              resetBall()
+            }
           }
         }
 
@@ -466,10 +516,10 @@ function App() {
 
       draw()
       return () => cancelAnimationFrame(animationRef.current)
-    }, [gameStarted])
+    }, [gameState, highScore])
 
     const handleMove = (e) => {
-      if (!gameStarted) return
+      if (gameState !== 'playing') return
       const rect = canvasRef.current.getBoundingClientRect()
       const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left
       paddleRef.current.x = x - paddleRef.current.width / 2
@@ -481,9 +531,10 @@ function App() {
 
     return (
       <div className="flex flex-col items-center">
-        {!gameStarted && (
+        {gameState === 'idle' && (
           <div className="text-center mb-4">
-            <h2 className="text-2xl font-bold text-gray-700 mb-4">🎮 스트레스 잠깐 풀기</h2>
+            <h2 className="text-2xl font-bold text-gray-700 mb-2">🎮 벽돌깨기</h2>
+            <p className="text-gray-500 mb-2">최고 점수: {highScore}</p>
             <p className="text-gray-500 mb-6">공을 튕겨 벽돌을 깨보세요!</p>
             <button
               onClick={startGame}
@@ -491,6 +542,62 @@ function App() {
             >
               게임 시작
             </button>
+          </div>
+        )}
+        
+        {gameState === 'playing' && (
+          <div className="flex justify-between w-full mb-3 px-2">
+            <div className="text-lg font-bold text-gray-600">❤️ {lives}</div>
+            <div className="text-lg font-bold text-gray-600">💎 {score}</div>
+            <div className="text-lg font-bold text-gray-600">Lv.{level}</div>
+          </div>
+        )}
+        
+        {gameState === 'cleared' && (
+          <div className="text-center mb-4 bg-green-pastel/30 rounded-2xl p-6 w-full">
+            <div className="text-4xl mb-2">🎉</div>
+            <h2 className="text-2xl font-bold text-gray-700 mb-2">클리어!</h2>
+            <p className="text-lg text-gray-600 mb-2">점수: {score}</p>
+            <p className="text-gray-500 mb-4">레벨 {level} 완료!</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={nextLevel}
+                className="bg-green-pastel text-gray-700 px-6 py-2 rounded-full font-bold"
+              >
+                다음 레벨
+              </button>
+              <button
+                onClick={() => setScreen('input')}
+                className="bg-gray-200 text-gray-700 px-6 py-2 rounded-full font-bold"
+              >
+                메인으로
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {gameState === 'gameover' && (
+          <div className="text-center mb-4 bg-pink-pastel/30 rounded-2xl p-6 w-full">
+            <div className="text-4xl mb-2">😢</div>
+            <h2 className="text-2xl font-bold text-gray-700 mb-2">게임 오버</h2>
+            <p className="text-lg text-gray-600 mb-2">최종 점수: {score}</p>
+            {score >= highScore && score > 0 && (
+              <p className="text-green-600 font-bold mb-2">🏆 새로운 최고 기록!</p>
+            )}
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={startGame}
+                className="bg-blue-pastel text-gray-700 px-6 py-2 rounded-full font-bold"
+              >
+                다시 하기
+              </button>
+              <button
+                onClick={() => { setGameState('idle'); setScreen('input'); }}
+                className="bg-gray-200 text-gray-700 px-6 py-2 rounded-full font-bold"
+              >
+                메인으로
+              </button>
+            </div>
           </div>
         )}
         
