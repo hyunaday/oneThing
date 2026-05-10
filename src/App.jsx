@@ -214,7 +214,7 @@ function App() {
   const [noisePlaying, setNoisePlaying] = useState(false)
   const [gameScore, setGameScore] = useState(0)
   
-  const [stressTimer, setStressTimer] = useState(120)
+  const [stressTimer, setStressTimer] = useState(60)
   const [isStressTimerRunning, setIsStressTimerRunning] = useState(false)
   const [stressNotification, setStressNotification] = useState('')
   
@@ -265,24 +265,24 @@ function App() {
   }, [isTimerRunning, timer])
 
   useEffect(() => {
-    if (isStressTimerRunning && stressTimer > 0) {
-      stressTimerRef.current = setInterval(() => {
-        setStressTimer(t => {
-          const newTime = t - 1
-          if (newTime === 90) setStressNotification('30초 지났어요!')
-          if (newTime === 60) setStressNotification('1분 지났어요!')
-          if (newTime === 30) setStressNotification('1분 30초 지났어요!')
-          if (newTime === 0) {
-            setIsStressTimerRunning(false)
-            setStressNotification('시간 완료! 스트레스가 풀렸나요?')
-            getRandomActivity()
-          }
-          return newTime
-        })
-      }, 1000)
-    }
-    return () => clearInterval(stressTimerRef.current)
-  }, [isStressTimerRunning])
+      if (isStressTimerRunning && stressTimer > 0) {
+        stressTimerRef.current = setInterval(() => {
+          setStressTimer(t => {
+            const newTime = t - 1
+            if (newTime === 45) setStressNotification('15초 지났어요!')
+            if (newTime === 30) setStressNotification('30초 지났어요!')
+            if (newTime === 15) setStressNotification('45초 지났어요!')
+            if (newTime === 0) {
+              setIsStressTimerRunning(false)
+              setStressNotification('시간 완료! 스트레스가 풀렸나요?')
+              getRandomActivity()
+            }
+            return newTime
+          })
+        }, 1000)
+      }
+      return () => clearInterval(stressTimerRef.current)
+    }, [isStressTimerRunning])
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60)
@@ -304,7 +304,7 @@ function App() {
   }
 
   const startStressTimer = () => {
-    setStressTimer(120)
+    setStressTimer(60)
     setIsStressTimerRunning(true)
     setStressNotification('')
     setRandomActivity(null)
@@ -316,7 +316,7 @@ function App() {
 
   const resetStressTimer = () => {
     setIsStressTimerRunning(false)
-    setStressTimer(120)
+    setStressTimer(60)
     setStressNotification('')
     setRandomActivity(null)
   }
@@ -333,15 +333,14 @@ function App() {
   const GameCanvas = () => {
     const canvasRef = useRef(null)
     const animationRef = useRef(null)
-    const gameTimerRef = useRef(null)
     
-    const [gameState, setGameState] = useState('idle')
-    const [gameTime, setGameTime] = useState(60)
-    const [brokenBricks, setBrokenBricks] = useState(0)
+    const [gameStarted, setGameStarted] = useState(false)
     
     const paddleRef = useRef({ x: 150, width: 80, height: 15 })
     const ballRef = useRef({ x: 190, y: 400, dx: 3, dy: -3, radius: 8 })
     const bricksRef = useRef([])
+    const scoreRef = useRef(0)
+    const brokenRef = useRef(0)
 
     const totalBricks = 15
 
@@ -351,7 +350,7 @@ function App() {
       const brickWidth = 60
       const brickHeight = 20
       const padding = 10
-      const offsetTop = 60
+      const offsetTop = 50
       const offsetLeft = 20
       const bricks = []
       for (let r = 0; r < rows; r++) {
@@ -369,29 +368,13 @@ function App() {
     }
 
     const startGame = () => {
-      setGameState('playing')
-      setGameTime(60)
-      setGameScore(0)
-      setBrokenBricks(0)
+      setGameStarted(true)
+      scoreRef.current = 0
+      brokenRef.current = 0
       paddleRef.current = { x: 150, width: 80, height: 15 }
       ballRef.current = { x: 190, y: 400, dx: 3, dy: -3, radius: 8 }
       initBricks()
     }
-
-    useEffect(() => {
-      if (gameState === 'playing' && gameTime > 0) {
-        gameTimerRef.current = setInterval(() => {
-          setGameTime(t => {
-            if (t <= 1) {
-              setGameState('gameover')
-              return 0
-            }
-            return t - 1
-          })
-        }, 1000)
-      }
-      return () => clearInterval(gameTimerRef.current)
-    }, [gameState])
 
     useEffect(() => {
       const canvas = canvasRef.current
@@ -423,7 +406,7 @@ function App() {
         ctx.arc(ballRef.current.x, ballRef.current.y, ballRef.current.radius, 0, Math.PI * 2)
         ctx.fill()
 
-        if (gameState === 'playing') {
+        if (gameStarted) {
           ballRef.current.x += ballRef.current.dx
           ballRef.current.y += ballRef.current.dy
 
@@ -436,7 +419,7 @@ function App() {
 
           if (
             ballRef.current.y + ballRef.current.radius > canvas.height - 40 &&
-            ballRef.current.y + ballRef.current.radius < canvas.height - 25 &&
+            ballRef.current.y - ballRef.current.radius < canvas.height - 25 &&
             ballRef.current.x > paddleRef.current.x - ballRef.current.radius &&
             ballRef.current.x < paddleRef.current.x + paddleRef.current.width + ballRef.current.radius
           ) {
@@ -444,29 +427,32 @@ function App() {
           }
 
           bricksRef.current.forEach(brick => {
-            if (brick.visible &&
-                ballRef.current.x + ballRef.current.radius > brick.x &&
-                ballRef.current.x - ballRef.current.radius < brick.x + brick.width &&
-                ballRef.current.y + ballRef.current.radius > brick.y &&
-                ballRef.current.y - ballRef.current.radius < brick.y + brick.height) {
-              
-              const overlapLeft = ballRef.current.x + ballRef.current.radius - brick.x
-              const overlapRight = brick.x + brick.width - (ballRef.current.x - ballRef.current.radius)
-              const overlapTop = ballRef.current.y + ballRef.current.radius - brick.y
-              const overlapBottom = brick.y + brick.height - (ballRef.current.y - ballRef.current.radius)
-              
-              const minOverlapX = Math.min(overlapLeft, overlapRight)
-              const minOverlapY = Math.min(overlapTop, overlapBottom)
-              
-              if (minOverlapX < minOverlapY) {
-                ballRef.current.dx *= -1
-              } else {
-                ballRef.current.dy *= -1
+            if (brick.visible) {
+              const closestX = Math.max(brick.x, Math.min(ballRef.current.x, brick.x + brick.width))
+              const closestY = Math.max(brick.y, Math.min(ballRef.current.y, brick.y + brick.height))
+              const distanceX = ballRef.current.x - closestX
+              const distanceY = ballRef.current.y - closestY
+              const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY)
+
+              if (distance < ballRef.current.radius) {
+                const overlapLeft = (ballRef.current.x + ballRef.current.radius) - brick.x
+                const overlapRight = (brick.x + brick.width) - (ballRef.current.x - ballRef.current.radius)
+                const overlapTop = (ballRef.current.y + ballRef.current.radius) - brick.y
+                const overlapBottom = (brick.y + brick.height) - (ballRef.current.y - ballRef.current.radius)
+
+                const minOverlapX = Math.min(overlapLeft, overlapRight)
+                const minOverlapY = Math.min(overlapTop, overlapBottom)
+
+                if (minOverlapX < minOverlapY) {
+                  ballRef.current.dx *= -1
+                } else {
+                  ballRef.current.dy *= -1
+                }
+
+                brick.visible = false
+                scoreRef.current += 10
+                brokenRef.current += 1
               }
-              
-              brick.visible = false
-              setGameScore(s => s + 10)
-              setBrokenBricks(b => b + 1)
             }
           })
 
@@ -480,10 +466,10 @@ function App() {
 
       draw()
       return () => cancelAnimationFrame(animationRef.current)
-    }, [gameState])
+    }, [gameStarted])
 
     const handleMove = (e) => {
-      if (gameState !== 'playing') return
+      if (!gameStarted) return
       const rect = canvasRef.current.getBoundingClientRect()
       const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left
       paddleRef.current.x = x - paddleRef.current.width / 2
@@ -495,19 +481,16 @@ function App() {
 
     return (
       <div className="flex flex-col items-center">
-        {gameState === 'idle' && (
-          <div className="text-center">
+        {!gameStarted && (
+          <div className="text-center mb-4">
             <h2 className="text-2xl font-bold text-gray-700 mb-4">🎮 스트레스 잠깐 풀기</h2>
-            <p className="text-gray-500 mb-2">제한 시간: 1분</p>
             <p className="text-gray-500 mb-6">공을 튕겨 벽돌을 깨보세요!</p>
-          </div>
-        )}
-        
-        {(gameState === 'playing' || gameState === 'gameover') && (
-          <div className="flex justify-between w-full mb-3 px-2">
-            <div className="text-lg font-bold text-gray-600">⏱️ {gameTime}초</div>
-            <div className="text-lg font-bold text-gray-600">💎 점수: {gameScore}</div>
-            <div className="text-lg font-bold text-gray-600">🧱 {brokenBricks}/{totalBricks}</div>
+            <button
+              onClick={startGame}
+              className="w-full bg-blue-pastel text-gray-700 px-8 py-3 rounded-full text-xl font-bold mb-4"
+            >
+              게임 시작
+            </button>
           </div>
         )}
         
@@ -520,48 +503,12 @@ function App() {
           onTouchMove={handleMove}
         />
         
-        <div className="mt-4 flex flex-col items-center gap-3 w-full">
-          {gameState === 'idle' && (
-            <button
-              onClick={startGame}
-              className="w-full bg-blue-pastel text-gray-700 px-8 py-3 rounded-full text-xl font-bold"
-            >
-              게임 시작
-            </button>
-          )}
-          
-          {gameState === 'gameover' && (
-            <div className="text-center w-full">
-              <p className="text-xl text-gray-700 mb-2">⏰ 시간 종료!</p>
-              <p className="text-lg text-gray-600 mb-4">
-                깬 벽돌: {brokenBricks}개 | 점수: {gameScore}점
-              </p>
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={startGame}
-                  className="bg-green-pastel text-gray-700 px-6 py-2 rounded-full font-bold"
-                >
-                  다시 하기
-                </button>
-                <button
-                  onClick={() => { setGameState('idle'); setScreen('input'); }}
-                  className="bg-gray-200 text-gray-700 px-6 py-2 rounded-full font-bold"
-                >
-                  메인으로
-                </button>
-              </div>
-            </div>
-          )}
-          
-          {gameState === 'idle' && (
-            <button
-              onClick={() => setScreen('input')}
-              className="w-full text-gray-500"
-            >
-              ← 메인으로 돌아가기
-            </button>
-          )}
-        </div>
+        <button
+          onClick={() => setScreen('input')}
+          className="w-full mt-4 text-gray-500"
+        >
+          ← 메인으로 돌아가기
+        </button>
       </div>
     )
   }
@@ -625,7 +572,7 @@ function App() {
               onClick={recommendTask}
               className="w-full bg-blue-pastel text-gray-700 py-4 rounded-xl text-xl font-bold mb-3"
             >
-              작업 추천 받기
+              시작
             </button>
             <button
               onClick={() => setScreen('stress')}
@@ -734,7 +681,7 @@ function App() {
               <div className="w-full h-4 bg-gray-200 rounded-full mb-4 overflow-hidden">
                 <div 
                   className="h-full bg-pink-pastel transition-all duration-1000"
-                  style={{ width: `${(stressTimer / 120) * 100}%` }}
+                  style={{ width: `${(stressTimer / 60) * 100}%` }}
                 />
               </div>
               
@@ -746,7 +693,7 @@ function App() {
             </div>
             
             <div className="flex justify-center gap-3 mb-6">
-              {!isStressTimerRunning && stressTimer === 120 && (
+              {!isStressTimerRunning && stressTimer === 60 && (
                 <button
                   onClick={startStressTimer}
                   className="bg-pink-pastel text-gray-700 px-6 py-3 rounded-full text-lg font-bold"
@@ -754,7 +701,7 @@ function App() {
                   시작
                 </button>
               )}
-              {(isStressTimerRunning || stressTimer < 120) && (
+              {(isStressTimerRunning || stressTimer < 60) && (
                 <>
                   <button
                     onClick={toggleStressPause}
